@@ -95,20 +95,39 @@ void setup() {
 */
 void loop() {
   
-  if (SIM800.available())   {                   // Если модем, что-то отправил...
+   if (SIM800.available())   {                   // Если модем, что-то отправил...
     _response = waitResponse();                 // Получаем ответ от модема для анализа
-     _response.trim();
+    _response.trim();                           // Убираем лишние пробелы в начале и конце
     Serial.println(_response);                  // Если нужно выводим в монитор порта
-    
-    if (_response.startsWith("RING")) {
-      sendATCommand("ATA", true);
+    String whiteListPhones = "+37062460"; // Белый список телефонов
+    if (_response.startsWith("RING")) {         // Есть входящий вызов
+      int phoneindex = _response.indexOf("+CLIP: \"");// Есть ли информация об определении номера, если да, то phoneindex>-1
+      String innerPhone = "";                   // Переменная для хранения определенного номера
+      if (phoneindex >= 0) {                    // Если информация была найдена
+        phoneindex += 8;                        // Парсим строку и ...
+        innerPhone = _response.substring(phoneindex, _response.indexOf("\"", phoneindex)); // ...получаем номер
+        Serial.println("Number: " + innerPhone); // Выводим номер в монитор порта
+      }
+      // Проверяем, чтобы длина номера была больше 6 цифр, и номер должен быть в списке
+      if (innerPhone.length() >= 7 && whiteListPhones.indexOf(innerPhone) >= 0) {
+        sendATCommand("ATA", true);        // Если да, то отвечаем на вызов
+      }
+      else {
+        sendATCommand("ATH", true);        // Если нет, то отклоняем вызов
+      }
     }
-
   }
   if (Serial.available())  {                    // Ожидаем команды по Serial...
     SIM800.write(Serial.read());                // ...и отправляем полученную команду модему
   };
-
-
-
 }
+
+/*
+.########.##....##.########.
+.##.......###...##.##.....##
+.##.......####..##.##.....##
+.######...##.##.##.##.....##
+.##.......##..####.##.....##
+.##.......##...###.##.....##
+.########.##....##.########.
+*/
