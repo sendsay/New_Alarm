@@ -10,7 +10,6 @@
 .##.....##.##.....##.##....##.....##...........##.##...##.....##.##....##.
 ..#######..########...######.....##.............###....##.....##.##.....##
 */
-
 SoftwareSerial SIM800(2, 3);                // Setup SIM800
 String _response = "";                      // Answer data from SIM800
 long lastUpdate = millis();                 // Time last update
@@ -18,8 +17,11 @@ long updatePeriod   = 60000;                // Check period
 
 String phones = "+37062460972, +37062925050";   // White list
 
-#define MOV_PIR 11
-#define CHECK_ALARM 13
+#define MOV_PIR 11                          // Move sensor
+#define CHECK_ALARM 13                      // Check sensor Led
+#define ALARM 7                             // Alarm siren
+bool alarmFlag = false;                     // Alarm mode flag        
+
 /*
  .########.##.....##.##....##..######..########.####..#######..##....##..######.
  .##.......##.....##.###...##.##....##....##.....##..##.....##.###...##.##....##
@@ -29,7 +31,6 @@ String phones = "+37062460972, +37062925050";   // White list
  .##.......##.....##.##...###.##....##....##.....##..##.....##.##...###.##....##
  .##........#######..##....##..######.....##....####..#######..##....##..######.
  */
-
 String waitResponse()
 {                                   // Функция ожидания ответа и возврата полученного результата
   String _resp = "";                // Переменная для хранения результата
@@ -88,15 +89,9 @@ void parseSMS(String msg) {                                   // Парсим SM
   int secondIndex = msgheader.indexOf("\",\"", firstIndex);
   msgphone = msgheader.substring(firstIndex, secondIndex);
 
-  Serial.println("Phone: " + msgphone);                       // Выводим номер телефона
-  Serial.println("Message: " + msgbody);                      // Выводим текст SMS
-
   if (msgphone.length() > 6 && phones.indexOf(msgphone) > -1) { // Если телефон в белом списке, то...
-   // setLedState(msgbody, msgphone);                           // ...выполняем команду
 
    Serial.println("White list phon e nubmber");
-
-
   }
   else {
     Serial.println("Unknown phonenumber");
@@ -112,7 +107,6 @@ void parseSMS(String msg) {                                   // Парсим SM
 .##....##.##..........##....##.....##.##.......
 ..######..########....##.....#######..##.......
 */
-
 void setup()
 {
   Serial.begin(9600);
@@ -122,6 +116,9 @@ void setup()
   pinMode(MOV_PIR, INPUT);
   pinMode(CHECK_ALARM, OUTPUT);
   digitalWrite(CHECK_ALARM, LOW);
+
+  pinMode(ALARM, OUTPUT);
+  digitalWrite(ALARM, LOW);
 
   Serial.println("Begin!");
 
@@ -213,7 +210,7 @@ void loop() {
     }
 
 //*** CALL
-    String whiteListPhones = "+37062460972"; // Белый список телефонов
+  //  String whiteListPhones = "+37062460972"; // Белый список телефонов
     if (_response.startsWith("RING"))
     {                                                  // Есть входящий вызов
       int phoneindex = _response.indexOf("+CLIP: \""); // Есть ли информация об определении номера, если да, то phoneindex>-1
@@ -225,7 +222,7 @@ void loop() {
         Serial.println("Number: " + innerPhone);                                           // Выводим номер в монитор порта
       }
       // Проверяем, чтобы длина номера была больше 6 цифр, и номер должен быть в списке
-      if (innerPhone.length() >= 7 && whiteListPhones.indexOf(innerPhone) >= 0)
+      if (innerPhone.length() >= 7 && phones.indexOf(innerPhone) >= 0)
       {
         sendATCommand("ATA", true); // Если да, то отвечаем на вызов
       }
@@ -237,17 +234,25 @@ void loop() {
   }
 
 //*** DTMF
-  if (_response.startsWith("+DTMF:")) {       // Если ответ начинается с "+DTMF:" тогда:
-    // Парсим полученный ответ...
-    // Мы знаем, что после этой команды будет пробел и один символ (нажатая клавиша),
-    // а значит можно сразу его "выдергивать":
-    String symbol = _response.substring(7, 8); // Выдергиваем символ с 7 позиции длиной 1 (по 8)
-  //   Serial.println("Key: " + symbol);
+  if (_response.startsWith("+DTMF:")) {     
+    String symbol = _response.substring(7, 8);
 
-    // Добавляем логику для полученных символов
-    //if (symbol=="") {
-    // ...
-    //  }
+    if (symbol=="1") {      //***Alarm ON
+      alarmFlag = true;
+      delay(200);
+      sendATCommand("ATH", false);
+      delay(200);
+      symbol = "";
+    }
+
+     if (symbol=="0") {      //***Alarm OFF
+      alarmFlag = false;
+      delay(200);
+      sendATCommand("ATH", false);
+      delay(200);
+      symbol = "";
+    }   
+
   }
 
 //*** send to serial
@@ -256,12 +261,18 @@ void loop() {
     SIM800.write(Serial.read()); // ...и отправляем полученную команду модему
   };
 
+//*** Alarm
   int movePin = digitalRead(MOV_PIR);
   if (movePin) {
+
     digitalWrite(CHECK_ALARM, HIGH);
-  } else
-  {
+
+    if (alarmFlag) {
+      digitalWrite(ALARM, LOW);
+    }
+  } else {
     digitalWrite(CHECK_ALARM, LOW);
+    digitalWrite(ALARM, HIGH);
   }
 
 }
