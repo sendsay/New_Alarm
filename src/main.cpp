@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 
+
 /*
 ..#######..########........##..........##....##.....##....###....########.
 .##.....##.##.....##.......##.........##.....##.....##...##.##...##.....##
@@ -11,8 +12,9 @@
 ..#######..########...######.....##.............###....##.....##.##.....##
 */
 
-SoftwareSerial SIM800(2, 3);
-String _response = "";                      // Переменная для хранения ответа модуля
+SoftwareSerial SIM800(2, 3);                // Setup SIM800
+String _response = "";                      // Answer data from SIM800
+
 
  /*
  .########.##.....##.##....##..######..########.####..#######..##....##..######.
@@ -34,7 +36,8 @@ String waitResponse() {                         // Функция ожидани
   else {                                        // Если пришел таймаут, то...
     Serial.println("Timeout...");               // ... оповещаем об этом и...
   }
-  return _resp;                                 // ... возвращаем результат. Пусто, если проблема
+  _resp.trim();
+  return _resp + "\n";                                 // ... возвращаем результат. Пусто, если проблема
 }
 
 String sendATCommand(String cmd, bool waiting) {
@@ -43,16 +46,11 @@ String sendATCommand(String cmd, bool waiting) {
   SIM800.println(cmd);                          // Отправляем команду модулю
   if (waiting) {                                // Если необходимо дождаться ответа...
     _resp = waitResponse();                     // ... ждем, когда будет передан ответ
-    // Если Echo Mode выключен (ATE0), то эти 3 строки можно закомментировать
-    // if (_resp.startsWith(cmd)) {  // Убираем из ответа дублирующуюся команду
-    //   _resp = _resp.substring(_resp.indexOf("\r", cmd.length()) + 2);
-    // }
     Serial.println(_resp);                      // Дублируем ответ в монитор порта
   }
-  return _resp;                                 // Возвращаем результат. Пусто, если проблема
+  _resp.trim();
+  return _resp + "\n";                                 // Возвращаем результат. Пусто, если проблема
 }
-
-
 
 
 /*
@@ -66,23 +64,22 @@ String sendATCommand(String cmd, bool waiting) {
 */
 
 void setup() {
-  Serial.begin(9600);                       // Скорость обмена данными с компьютером
-  SIM800.begin(9600);                       // Скорость обмена данными с модемом
-  Serial.println("Start!");
-  
-  sendATCommand("AT", true);                // Автонастройка скорости
-  // sendATCommand("AT+CLVL?", true);          // Запрашиваем громкость динамика
-  // sendATCommand("AT+CMGF=1", true);         // Включить TextMode для SMS
-  sendATCommand("AT+DDET=1,0,1", true);     // Включить DTMF - в этой строке умышленно допущена ошибка - недопустимый параметр
-  sendATCommand("AT+COLP=1", true);               
+  Serial.begin(9600);                       
+  SIM800.begin(9600);                       
+  Serial.println("Begin!");
 
-  do {
-    _response = sendATCommand("AT+CLIP=1", true);  // Включаем АОН
-    _response.trim();                       // Убираем пробельные символы в начале и конце
-  } while (_response != "OK");              // Не пускать дальше, пока модем не вернет ОК
+  sendATCommand("ATE0", true);              // Echo off
+ 
+  sendATCommand("AT", true);                // Adjust speed
+  sendATCommand("AT+CMGF=1", true);         // Text Mode sms
+  sendATCommand("AT+DDET=1,0,1", true);     // DTMF on
+  sendATCommand("AT+COLP=1", true);         // Line identify   
 
-  Serial.println("CLI enabled");            // Информируем, что АОН включен
+  sendATCommand("AT+CLIP=1", true);         // Caller ID 
+
+  Serial.println("Begin");     
 }
+
 
 /*
 .##........#######...#######..########.
@@ -93,6 +90,7 @@ void setup() {
 .##.......##.....##.##.....##.##.......
 .########..#######...#######..##.......
 */
+
 void loop() {
   
    if (SIM800.available())   {                   // Если модем, что-то отправил...
@@ -101,7 +99,7 @@ void loop() {
     Serial.println(_response);                  // Если нужно выводим в монитор порта
     String whiteListPhones = "+37062460"; // Белый список телефонов
     if (_response.startsWith("RING")) {         // Есть входящий вызов
-      int phoneindex = _response.indexOf("+CLIP: \"");// Есть ли информация об определении номера, если да, то phoneindex>-1
+      int phoneindex = _response.indexOf("+CLIP: \""); // Есть ли информация об определении номера, если да, то phoneindex>-1
       String innerPhone = "";                   // Переменная для хранения определенного номера
       if (phoneindex >= 0) {                    // Если информация была найдена
         phoneindex += 8;                        // Парсим строку и ...
