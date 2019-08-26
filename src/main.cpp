@@ -17,12 +17,17 @@ long lastUpdate = millis();                 // Time last update
 long updatePeriod   = 60000;                // Check period
 
 String phones = "+37062460972, +37062925050";   // White list
+String sendList[] = {"+37062460972", "+37062925050"}; // send list 
 
 #define MOV_PIR 11                          // Move sensor
 #define CHECK_ALARM 13                      // Check sensor Led
 #define ALARM 7                             // Alarm siren
-bool alarmFlag = false;                     // Alarm mode flag     
-#define ADDRES_FLAG 250                     // Adress flag of mode   
+bool alarmFlag = true;                     // Alarm mode flag     
+#define ADDRES_FLAG 250                     // Adress flag of mode  
+bool sendFlag = true;                       // send SMS flag
+String smsText = "ALARM!!! ALARM!!! ALARM!!!";  // Sms text when Alarm 
+
+#define DEBUG                               // Debug flag;
 
 /*
  .########.##.....##.##....##..######..########.####..#######..##....##..######.
@@ -72,6 +77,7 @@ void sendSMS(String phone, String message)
 {
   sendATCommand("AT+CMGS=\"" + phone + "\"", true);           // Переходим в режим ввода текстового сообщения
   sendATCommand(message + "\r\n" + (String)((char)26), true); // После текста отправляем перенос строки и Ctrl+Z
+  
 }
 
 //**********************
@@ -134,7 +140,9 @@ void setup()
 
   lastUpdate = millis();
 
+#ifndef DEBUG
   alarmFlag = EEPROM.read(ADDRES_FLAG);   // Read and set flag mode
+#endif
 
   Serial.println("Begin");
 }
@@ -267,7 +275,15 @@ void loop() {
     SIM800.write(Serial.read()); // ...и отправляем полученную команду модему
   };
 
-//*** Alarm
+/*
+....###....##..........###....########..##.....##
+...##.##...##.........##.##...##.....##.###...###
+..##...##..##........##...##..##.....##.####.####
+.##.....##.##.......##.....##.########..##.###.##
+.#########.##.......#########.##...##...##.....##
+.##.....##.##.......##.....##.##....##..##.....##
+.##.....##.########.##.....##.##.....##.##.....##
+*/
   int movePin = digitalRead(MOV_PIR);
   if (movePin) {
 
@@ -275,10 +291,20 @@ void loop() {
 
     if (alarmFlag) {
       digitalWrite(ALARM, LOW);
-    }
+
+     while  (sendFlag ) {       
+        for (int i = 0; i < (sizeof(sendList)/sizeof(sendList[0])); i++) {
+
+          sendSMS(sendList[i], smsText);
+          
+        }
+        sendFlag = false;
+      }
+    }   
   } else {
     digitalWrite(CHECK_ALARM, LOW);
     digitalWrite(ALARM, HIGH);
+    sendFlag = true;
   }
 
 }
