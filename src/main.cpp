@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
+#include <EEPROM.h>
 
 /*
 ..#######..########........##..........##....##.....##....###....########.
@@ -20,7 +21,8 @@ String phones = "+37062460972, +37062925050";   // White list
 #define MOV_PIR 11                          // Move sensor
 #define CHECK_ALARM 13                      // Check sensor Led
 #define ALARM 7                             // Alarm siren
-bool alarmFlag = false;                     // Alarm mode flag        
+bool alarmFlag = false;                     // Alarm mode flag     
+#define ADDRES_FLAG 250                     // Adress flag of mode   
 
 /*
  .########.##.....##.##....##..######..########.####..#######..##....##..######.
@@ -131,6 +133,8 @@ void setup()
   sendATCommand("AT+VTD=5", true);
 
   lastUpdate = millis();
+
+  alarmFlag = EEPROM.read(ADDRES_FLAG);   // Read and set flag mode
 
   Serial.println("Begin");
 }
@@ -243,6 +247,7 @@ void loop() {
       sendATCommand("ATH", false);
       delay(200);
       symbol = "";
+      EEPROM.update(ADDRES_FLAG, 1);
     }
 
      if (symbol=="0") {      //***Alarm OFF
@@ -251,6 +256,7 @@ void loop() {
       sendATCommand("ATH", false);
       delay(200);
       symbol = "";
+      EEPROM.update(ADDRES_FLAG, 0);
     }   
 
   }
