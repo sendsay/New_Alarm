@@ -25,7 +25,9 @@ String sendList[] = {"+37062460972", "+37062925050"}; // send list
 bool alarmFlag = true;                     // Alarm mode flag     
 #define ADDRES_FLAG 250                     // Adress flag of mode  
 bool sendFlag = true;                       // send SMS flag
+
 String smsText = "ALARM!!! ALARM!!! ALARM!!!";  // Sms text when Alarm 
+bool hasmsg = false;
 
 #define DEBUG                               // Debug flag;
 
@@ -62,7 +64,7 @@ String sendATCommand(String cmd, bool waiting)
 {
   String _resp = "";   // Переменная для хранения результата
   Serial.println(cmd); // Дублируем команду в монитор порта
-  SIM800.println(cmd); // Отправляем команду модулю
+  _resp = SIM800.println(cmd); // Отправляем команду модулю
   if (waiting)
   {                         // Если необходимо дождаться ответа...
     _resp = waitResponse(); // ... ждем, когда будет передан ответ
@@ -76,7 +78,7 @@ String sendATCommand(String cmd, bool waiting)
 void sendSMS(String phone, String message)
 {
   sendATCommand("AT+CMGS=\"" + phone + "\"", true);           // Переходим в режим ввода текстового сообщения
-  sendATCommand(message + "\r\n" + (String)((char)26), true); // После текста отправляем перенос строки и Ctrl+Z
+  sendATCommand(message + "\r\n" + (String)((char)26), true); // После текста отправляем перенос строки и Ctrl+
   
 }
 
@@ -103,6 +105,65 @@ void parseSMS(String msg) {                                   // Парсим SM
   }
   else {
     Serial.println("Unknown phonenumber");
+    }
+}
+
+void checkSMS() {
+    if (lastUpdate + updatePeriod < millis() ) {                    // Пора проверить наличие новых сообщений
+    do {
+      _response = sendATCommand("AT+CMGL=\"REC UNREAD\",1", true);// Отправляем запрос чтения непрочитанных сообщений
+      if (_response.indexOf("+CMGL: ") > -1) {                    // Если есть хоть одно, получаем его индекс
+        int msgIndex = _response.substring(_response.indexOf("+CMGL: ") + 7, _response.indexOf("\"REC UNREAD\"", _response.indexOf("+CMGL: ")) - 1).toInt();
+        char i = 0;                                               // Объявляем счетчик попыток
+        do {
+          i++;                                                    // Увеличиваем счетчик
+          _response = sendATCommand("AT+CMGR=" + (String)msgIndex + ",1", true);  // Пробуем получить текст SMS по индексу
+          _response.trim();                                       // Убираем пробелы в начале/конце
+          if (_response.endsWith("OK")) {                         // Если ответ заканчивается на "ОК"
+            if (!hasmsg) hasmsg = true;                           // Ставим флаг наличия сообщений для удаления
+            sendATCommand("AT+CMGR=" + (String)msgIndex, true);   // Делаем сообщение прочитанным
+            sendATCommand("\n", true);                            // Перестраховка - вывод новой строки
+            parseSMS(_response);                                  // Отправляем текст сообщения на обработку
+            break;                                                // Выход из do{}
+          }
+          else {                                                  // Если сообщение не заканчивается на OK
+            Serial.println ("Error answer");                      // Какая-то ошибка
+            sendATCommand("\n", true);                            // Отправляем новую строку и повторяем попытку
+          }
+        } while (i < 10);
+        break;
+      }
+      else {
+        lastUpdate = millis();                                    // Обнуляем таймер
+        if (hasmsg) {
+          sendATCommand("AT+CMGDA=\"DEL READ\"", true);           // Удаляем все прочитанные сообщения
+          hasmsg = false;
+        }
+        break;
+      }
+    } while (1);
+  }
+}
+
+void checkSMSsend() {
+    if (_response.startsWith("+CMGS:"))
+    {                                                                     // Пришло сообщение об отправке SMS
+      int index = _response.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
+      String result = _response.substring(index + 2, _response.length()); // Получаем статус
+      result.trim();                                                      // Убираем пробельные символы в начале/конце
+
+      if (result == "OK")
+      { // Если результат ОК - все нормально
+
+        Serial.println("Message was sent. OK");
+        
+      }
+      else
+      { // Если нет, нужно повторить отправку
+
+        Serial.println("Message was not sent. Error");
+      
+      }
     }
 }
 
@@ -157,55 +218,22 @@ void setup()
 .########..#######...#######..##.......
 */
 
-bool hasmsg = false;
+
 
 void loop() {
 
 //*** Check sms
-  if (lastUpdate + updatePeriod < millis() ) {                    // Пора проверить наличие новых сообщений
-    do {
-      _response = sendATCommand("AT+CMGL=\"REC UNREAD\",1", true);// Отправляем запрос чтения непрочитанных сообщений
-      if (_response.indexOf("+CMGL: ") > -1) {                    // Если есть хоть одно, получаем его индекс
-        int msgIndex = _response.substring(_response.indexOf("+CMGL: ") + 7, _response.indexOf("\"REC UNREAD\"", _response.indexOf("+CMGL: ")) - 1).toInt();
-        char i = 0;                                               // Объявляем счетчик попыток
-        do {
-          i++;                                                    // Увеличиваем счетчик
-          _response = sendATCommand("AT+CMGR=" + (String)msgIndex + ",1", true);  // Пробуем получить текст SMS по индексу
-          _response.trim();                                       // Убираем пробелы в начале/конце
-          if (_response.endsWith("OK")) {                         // Если ответ заканчивается на "ОК"
-            if (!hasmsg) hasmsg = true;                           // Ставим флаг наличия сообщений для удаления
-            sendATCommand("AT+CMGR=" + (String)msgIndex, true);   // Делаем сообщение прочитанным
-            sendATCommand("\n", true);                            // Перестраховка - вывод новой строки
-            parseSMS(_response);                                  // Отправляем текст сообщения на обработку
-            break;                                                // Выход из do{}
-          }
-          else {                                                  // Если сообщение не заканчивается на OK
-            Serial.println ("Error answer");                      // Какая-то ошибка
-            sendATCommand("\n", true);                            // Отправляем новую строку и повторяем попытку
-          }
-        } while (i < 10);
-        break;
-      }
-      else {
-        lastUpdate = millis();                                    // Обнуляем таймер
-        if (hasmsg) {
-          sendATCommand("AT+CMGDA=\"DEL READ\"", true);           // Удаляем все прочитанные сообщения
-          hasmsg = false;
-        }
-        break;
-      }
-    } while (1);
-  }
+  checkSMS();
 
+if (SIM800.available())
+{                             // Если модем, что-то отправил...
+  _response = waitResponse(); // Получаем ответ от модема для анализа
+  _response.trim();           // Убираем лишние пробелы в начале и конце
 
-  if (SIM800.available())
-  {                             // Если модем, что-то отправил...
-    _response = waitResponse(); // Получаем ответ от модема для анализа
-    _response.trim();           // Убираем лишние пробелы в начале и конце
-    Serial.println(_response);  // Если нужно выводим в монитор порта
+  Serial.println(_response);  // Если нужно выводим в монитор порта
 
 //*** SMS
-    if (_response.startsWith("+CMGS:"))
+  if (_response.startsWith("+CMGS:"))
     {                                                                     // Пришло сообщение об отправке SMS
       int index = _response.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
       String result = _response.substring(index + 2, _response.length()); // Получаем статус
@@ -213,13 +241,14 @@ void loop() {
 
       if (result == "OK")
       { // Если результат ОК - все нормально
-        Serial.println("Message was sent. OK");
+        Serial.println("Message was sent. OK :");        
       }
       else
       { // Если нет, нужно повторить отправку
         Serial.println("Message was not sent. Error");
       }
     }
+
 
 //*** CALL
   //  String whiteListPhones = "+37062460972"; // Белый список телефонов
@@ -289,17 +318,43 @@ void loop() {
 
     digitalWrite(CHECK_ALARM, HIGH);
 
-    if (alarmFlag) {
-      digitalWrite(ALARM, LOW);
-
+    if (alarmFlag) {    
      while  (sendFlag ) {       
         for (int i = 0; i < (sizeof(sendList)/sizeof(sendList[0])); i++) {
 
-          sendSMS(sendList[i], smsText);
+        sendSMS(sendList[i], smsText);
+        
+          do  {
+
+            if (SIM800.available())
+            {                             // Если модем, что-то отправил...
+              _response = waitResponse(); // Получаем ответ от модема для анализа
+              _response.trim();           // Убираем лишние пробелы в начале и конце
+
+              if (_response.startsWith("+CMGS:"))
+              {                                                                     // Пришло сообщение об отправке SMS
+                int index = _response.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
+                String result = _response.substring(index + 2, _response.length()); // Получаем статус
+                result.trim();                                                      // Убираем пробельные символы в начале/конце
+
+                if (result == "OK")
+                { // Если результат ОК - все нормально
+                  Serial.println("Message was sent. OK :");  
+                  break;     
+                }
+                else
+                { // Если нет, нужно повторить отправку
+                  Serial.println("Message was not sent. Error");
+                  break;
+                }
+              }
+            }
           
+          } while (_response != "OK");       
         }
         sendFlag = false;
       }
+      digitalWrite(ALARM, LOW);
     }   
   } else {
     digitalWrite(CHECK_ALARM, LOW);
