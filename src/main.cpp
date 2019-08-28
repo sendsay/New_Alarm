@@ -22,14 +22,14 @@ String sendList[] = {"+37062460972", "+37062925050"}; // send list
 #define MOV_PIR 11                          // Move sensor
 #define CHECK_ALARM 13                      // Check sensor Led
 #define ALARM 7                             // Alarm siren
-bool alarmFlag = true;                     // Alarm mode flag     
+static bool alarmFlag = false;                     // Alarm mode flag     
 #define ADDRES_FLAG 250                     // Adress flag of mode  
-bool sendFlag = true;                       // send SMS flag
+bool sendFlag = false;                       // send SMS flag
 
 String smsText = "ALARM!!! ALARM!!! ALARM!!!";  // Sms text when Alarm 
 bool hasmsg = false;
 
-#define DEBUG                               // Debug flag;
+// #define DEBUG                               // Debug flag;
 
 /*
  .########.##.....##.##....##..######..########.####..#######..##....##..######.
@@ -285,6 +285,7 @@ if (SIM800.available())
       delay(200);
       symbol = "";
       EEPROM.update(ADDRES_FLAG, 1);
+
     }
 
      if (symbol=="0") {      //***Alarm OFF
@@ -317,44 +318,49 @@ if (SIM800.available())
   if (movePin) {
 
     digitalWrite(CHECK_ALARM, HIGH);
+  
+
 
     if (alarmFlag) {    
-     while  (sendFlag ) {       
-        for (int i = 0; i < (sizeof(sendList)/sizeof(sendList[0])); i++) {
 
-        sendSMS(sendList[i], smsText);
-        
-          do  {
+        digitalWrite(ALARM, LOW);   
 
-            if (SIM800.available())
-            {                             // Если модем, что-то отправил...
-              _response = waitResponse(); // Получаем ответ от модема для анализа
-              _response.trim();           // Убираем лишние пробелы в начале и конце
+        while  (sendFlag ) {       
+          for (int i = 0; i < (sizeof(sendList)/sizeof(sendList[0])); i++) {
 
-              if (_response.startsWith("+CMGS:"))
-              {                                                                     // Пришло сообщение об отправке SMS
-                int index = _response.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
-                String result = _response.substring(index + 2, _response.length()); // Получаем статус
-                result.trim();                                                      // Убираем пробельные символы в начале/конце
-
-                if (result == "OK")
-                { // Если результат ОК - все нормально
-                  Serial.println("Message was sent. OK :");  
-                  break;     
-                }
-                else
-                { // Если нет, нужно повторить отправку
-                  Serial.println("Message was not sent. Error");
-                  break;
+             delay(500);   
+          sendSMS(sendList[i], smsText);
+          
+            do  {
+              if (SIM800.available())
+              {                             // Если модем, что-то отправил...
+                _response = waitResponse(); // Получаем ответ от модема для анализа
+                _response.trim();           // Убираем лишние пробелы в начале и конце
+                if (_response.startsWith("+CMGS:"))
+                {                                                                     // Пришло сообщение об отправке SMS
+                  int index = _response.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
+                  String result = _response.substring(index + 2, _response.length()); // Получаем статус
+                  result.trim();                                                     // Убираем пробельные символы в начале/конце
+                  if (result == "OK")
+                  { // Если результат ОК - все нормально
+                    Serial.println("Message was sent. OK :");  
+                    break;     
+                  }
+                  else
+                  { // Если нет, нужно повторить отправку
+                    Serial.println("Message was not sent. Error");
+                    break;
+                  }
                 }
               }
-            }
-          
-          } while (_response != "OK");       
+            
+            } while (_response != "OK");   
+            
         }
         sendFlag = false;
-      }
-      digitalWrite(ALARM, LOW);
+      }  
+
+     
     }   
   } else {
     digitalWrite(CHECK_ALARM, LOW);
