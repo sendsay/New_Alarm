@@ -279,24 +279,32 @@ if (SIM800.available())
     String symbol = _response.substring(7, 8);
 
     if (symbol=="1") {      //***Alarm ON
-      alarmFlag = true;
-      delay(200);
-      sendATCommand("ATH", false);
-      delay(200);
-      symbol = "";
-      EEPROM.update(ADDRES_FLAG, 1);
-
+      if (alarmFlag == false) {
+        sendATCommand("AT+VTS=1", false);
+        alarmFlag = true;
+        delay(200);
+        Serial.println("Alarm ON1!");
+        delay(1000);
+        sendATCommand("ATH", false);
+        delay(200);
+        symbol = "";
+        EEPROM.update(ADDRES_FLAG, 1);
+      }
     }
 
-     if (symbol=="0") {      //***Alarm OFF
-      alarmFlag = false;
-      delay(200);
-      sendATCommand("ATH", false);
-      delay(200);
-      symbol = "";
-      EEPROM.update(ADDRES_FLAG, 0);
+    if (symbol=="0") {      //***Alarm OFF
+      if (alarmFlag == true) {
+        sendATCommand("AT+VTS=0", false);
+        alarmFlag = false;
+        delay(200);
+        Serial.println("Alarm OFF!");
+        delay(1000);
+        sendATCommand("ATH", false);
+        delay(200);
+        symbol = "";
+        EEPROM.update(ADDRES_FLAG, 0);
+      }
     }   
-
   }
 
 //*** send to serial
