@@ -14,6 +14,8 @@
 SoftwareSerial SIM800(2, 3);                // Setup SIM800
 String _response = "";                      // Answer data from SIM800
 long lastUpdate = millis();                 // Time last update
+long waitCheckAlarm = 0;                    // Wait LED on when check LED alarm
+bool flagCheckAlarm = false;                // Flag when check alarm
 long updatePeriod   = 60000;                // Check period
 
 String phones = "+37062460972, +37062925050";   // White list
@@ -252,16 +254,17 @@ void checkDTMF() {
 */
 void setup()
 {
-  Serial.begin(9600);
-  SIM800.begin(9600);
-  SIM800.setTimeout(100);
 
-  pinMode(MOV_PIR, INPUT);
-  pinMode(CHECK_ALARM, OUTPUT);
-  digitalWrite(CHECK_ALARM, LOW);
+ // pinMode(MOV_PIR, INPUT);
 
   pinMode(ALARM, OUTPUT);
   digitalWrite(ALARM, LOW);
+  pinMode(CHECK_ALARM, OUTPUT);
+  // digitalWrite(CHECK_ALARM, HIGH);
+
+  Serial.begin(9600);
+  SIM800.begin(9600);
+  SIM800.setTimeout(100);
 
   Serial.println("Begin!");
 
@@ -326,14 +329,13 @@ void loop() {
 .##.....##.##.......##.....##.##....##..##.....##
 .##.....##.########.##.....##.##.....##.##.....##
 */
+
   int movePin = digitalRead(MOV_PIR);
   if (movePin) {
 
     digitalWrite(CHECK_ALARM, HIGH);
 
-    if (alarmFlag) {    
-
-        
+    if (alarmFlag) {            
 
         while  (sendFlag ) {       
           for (int i = 0; i < (sizeof(sendList)/sizeof(sendList[0])); i++) {
@@ -370,13 +372,15 @@ void loop() {
         sendFlag = false;
         Serial.println("Alarm LOUD!!!");
         digitalWrite(ALARM, LOW);  
+        
+        movePin = digitalRead(MOV_PIR);
       }     
     }   
   } else {
-    digitalWrite(CHECK_ALARM, LOW);
     digitalWrite(ALARM, HIGH);
+    digitalWrite(CHECK_ALARM, LOW);
     sendFlag = true;
-  }
+  }  
 
 }
 
