@@ -17,12 +17,12 @@ long lastUpdate = millis();                 // Time last update
 long updatePeriod   = 60000;                // Check period
 
 String phones = "+37062460972, +37062925050";   // White list
-String sendList[] = {"+37062460972", "+37062925050"}; // send list 
+String sendList[] = {"+37062460972"}; // send list 
 
 #define MOV_PIR 11                          // Move sensor
 #define CHECK_ALARM 13                      // Check sensor Led
 #define ALARM 7                             // Alarm siren
-static bool alarmFlag = false;                     // Alarm mode flag     
+bool alarmFlag = false;                     // Alarm mode flag     
 #define ADDRES_FLAG 250                     // Adress flag of mode  
 bool sendFlag = false;                       // send SMS flag
 
@@ -146,26 +146,100 @@ void checkSMS() {
 }
 
 void checkSMSsend() {
-    if (_response.startsWith("+CMGS:"))
-    {                                                                     // Пришло сообщение об отправке SMS
-      int index = _response.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
-      String result = _response.substring(index + 2, _response.length()); // Получаем статус
-      result.trim();                                                      // Убираем пробельные символы в начале/конце
+  if (_response.startsWith("+CMGS:"))
+  {                                                                     // Пришло сообщение об отправке SMS
+    int index = _response.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
+    String result = _response.substring(index + 2, _response.length()); // Получаем статус
+    result.trim();                                                      // Убираем пробельные символы в начале/конце
 
-      if (result == "OK")
-      { // Если результат ОК - все нормально
+    if (result == "OK")
+    { // Если результат ОК - все нормально
 
-        Serial.println("Message was sent. OK");
-        
-      }
-      else
-      { // Если нет, нужно повторить отправку
-
-        Serial.println("Message was not sent. Error");
+      Serial.println("Message was sent. OK");
       
+    }
+    else
+    { // Если нет, нужно повторить отправку
+
+      Serial.println("Message was not sent. Error");
+    
+    }
+  }
+}
+
+void checkSendSMS(String resp){
+  if (resp.startsWith("+CMGS:")) {                                                                     // Пришло сообщение об отправке SMS
+    int index = resp.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
+    String result = resp.substring(index + 2, resp.length()); // Получаем статус
+    result.trim();                                                      // Убираем пробельные символы в начале/конце
+
+    if (result == "OK")
+    { // Если результат ОК - все нормально
+      Serial.println("Message was sent. OK :");        
+    }
+    else
+    { // Если нет, нужно повторить отправку
+      Serial.println("Message was not sent. Error");
+    }
+  }
+}
+
+void checkCall() {
+  if (_response.startsWith("RING")) {                                                  // Есть входящий вызов
+    int phoneindex = _response.indexOf("+CLIP: \""); // Есть ли информация об определении номера, если да, то phoneindex>-1
+    String innerPhone = "";                          // Переменная для хранения определенного номера
+    if (phoneindex >= 0)
+    {                                                                                    // Если информация была найдена
+      phoneindex += 8;                                                                   // Парсим строку и ...
+      innerPhone = _response.substring(phoneindex, _response.indexOf("\"", phoneindex)); // ...получаем номер
+      Serial.println("Number: " + innerPhone);                                           // Выводим номер в монитор порта
+    }
+    // Проверяем, чтобы длина номера была больше 6 цифр, и номер должен быть в списке
+    if (innerPhone.length() >= 7 && phones.indexOf(innerPhone) >= 0)
+    {
+      sendATCommand("ATA", true); // Если да, то отвечаем на вызов
+    }
+    else
+    {
+      sendATCommand("ATH", true); // Если нет, то отклоняем вызов
+    }
+  }
+}
+
+void checkDTMF() {
+  if (_response.startsWith("+DTMF:")) {     
+    String symbol = _response.substring(7, 8);
+
+    if (symbol=="1") {      //***Alarm ON
+      if (alarmFlag == false) {
+        sendATCommand("AT+VTS=1", false);
+        alarmFlag = true;
+        delay(200);
+        Serial.println("Alarm ON1!");
+        delay(1000);
+        sendATCommand("ATH", false);
+        delay(200);
+        symbol = "";
+        EEPROM.update(ADDRES_FLAG, 1);
       }
     }
+
+    if (symbol=="0") {      //***Alarm OFF
+      if (alarmFlag == true) {
+        sendATCommand("AT+VTS=0", false);
+        alarmFlag = false;
+        delay(200);
+        Serial.println("Alarm OFF!");
+        delay(1000);
+        sendATCommand("ATH", false);
+        delay(200);
+        symbol = "";
+        EEPROM.update(ADDRES_FLAG, 0);
+      }
+    }   
+  }
 }
+
 
 /*
 ..######..########.########.##.....##.########.
@@ -201,10 +275,7 @@ void setup()
 
   lastUpdate = millis();
 
-#ifndef DEBUG
   alarmFlag = EEPROM.read(ADDRES_FLAG);   // Read and set flag mode
-#endif
-
   Serial.println("Begin");
 }
 
@@ -225,87 +296,20 @@ void loop() {
 //*** Check sms
   checkSMS();
 
-if (SIM800.available())
-{                             // Если модем, что-то отправил...
-  _response = waitResponse(); // Получаем ответ от модема для анализа
-  _response.trim();           // Убираем лишние пробелы в начале и конце
-
-  Serial.println(_response);  // Если нужно выводим в монитор порта
+  if (SIM800.available()) {                            
+    _response = waitResponse(); 
+    _response.trim();          
+    Serial.println(_response);
 
 //*** SMS
-  if (_response.startsWith("+CMGS:"))
-    {                                                                     // Пришло сообщение об отправке SMS
-      int index = _response.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
-      String result = _response.substring(index + 2, _response.length()); // Получаем статус
-      result.trim();                                                      // Убираем пробельные символы в начале/конце
-
-      if (result == "OK")
-      { // Если результат ОК - все нормально
-        Serial.println("Message was sent. OK :");        
-      }
-      else
-      { // Если нет, нужно повторить отправку
-        Serial.println("Message was not sent. Error");
-      }
-    }
-
+  checkSendSMS(_response);
 
 //*** CALL
-  //  String whiteListPhones = "+37062460972"; // Белый список телефонов
-    if (_response.startsWith("RING"))
-    {                                                  // Есть входящий вызов
-      int phoneindex = _response.indexOf("+CLIP: \""); // Есть ли информация об определении номера, если да, то phoneindex>-1
-      String innerPhone = "";                          // Переменная для хранения определенного номера
-      if (phoneindex >= 0)
-      {                                                                                    // Если информация была найдена
-        phoneindex += 8;                                                                   // Парсим строку и ...
-        innerPhone = _response.substring(phoneindex, _response.indexOf("\"", phoneindex)); // ...получаем номер
-        Serial.println("Number: " + innerPhone);                                           // Выводим номер в монитор порта
-      }
-      // Проверяем, чтобы длина номера была больше 6 цифр, и номер должен быть в списке
-      if (innerPhone.length() >= 7 && phones.indexOf(innerPhone) >= 0)
-      {
-        sendATCommand("ATA", true); // Если да, то отвечаем на вызов
-      }
-      else
-      {
-        sendATCommand("ATH", true); // Если нет, то отклоняем вызов
-      }
-    }
-  }
+  checkCall();
 
 //*** DTMF
-  if (_response.startsWith("+DTMF:")) {     
-    String symbol = _response.substring(7, 8);
-
-    if (symbol=="1") {      //***Alarm ON
-      if (alarmFlag == false) {
-        sendATCommand("AT+VTS=1", false);
-        alarmFlag = true;
-        delay(200);
-        Serial.println("Alarm ON1!");
-        delay(1000);
-        sendATCommand("ATH", false);
-        delay(200);
-        symbol = "";
-        EEPROM.update(ADDRES_FLAG, 1);
-      }
-    }
-
-    if (symbol=="0") {      //***Alarm OFF
-      if (alarmFlag == true) {
-        sendATCommand("AT+VTS=0", false);
-        alarmFlag = false;
-        delay(200);
-        Serial.println("Alarm OFF!");
-        delay(1000);
-        sendATCommand("ATH", false);
-        delay(200);
-        symbol = "";
-        EEPROM.update(ADDRES_FLAG, 0);
-      }
-    }   
-  }
+  checkDTMF();
+}
 
 //*** send to serial
   if (Serial.available())
@@ -326,24 +330,23 @@ if (SIM800.available())
   if (movePin) {
 
     digitalWrite(CHECK_ALARM, HIGH);
-  
-
 
     if (alarmFlag) {    
 
-        digitalWrite(ALARM, LOW);   
+        
 
         while  (sendFlag ) {       
           for (int i = 0; i < (sizeof(sendList)/sizeof(sendList[0])); i++) {
 
-             delay(500);   
+          delay(500);   
           sendSMS(sendList[i], smsText);
           
             do  {
               if (SIM800.available())
-              {                             // Если модем, что-то отправил...
-                _response = waitResponse(); // Получаем ответ от модема для анализа
-                _response.trim();           // Убираем лишние пробелы в начале и конце
+              {                             
+                _response = waitResponse(); 
+                _response.trim();           
+              
                 if (_response.startsWith("+CMGS:"))
                 {                                                                     // Пришло сообщение об отправке SMS
                   int index = _response.lastIndexOf("\r\n");                          // Находим последний перенос строки, перед статусом
@@ -352,7 +355,7 @@ if (SIM800.available())
                   if (result == "OK")
                   { // Если результат ОК - все нормально
                     Serial.println("Message was sent. OK :");  
-                    break;     
+                    break;
                   }
                   else
                   { // Если нет, нужно повторить отправку
@@ -360,15 +363,14 @@ if (SIM800.available())
                     break;
                   }
                 }
-              }
+              }            
             
-            } while (_response != "OK");   
-            
+            } while (_response != "OK");            
         }
         sendFlag = false;
-      }  
-
-     
+        Serial.println("Alarm LOUD!!!");
+        digitalWrite(ALARM, LOW);  
+      }     
     }   
   } else {
     digitalWrite(CHECK_ALARM, LOW);
