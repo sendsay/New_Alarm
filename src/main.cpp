@@ -27,6 +27,7 @@ String sendList[] = {"+37062460972"}; // send list
 bool alarmFlag = false;                     // Alarm mode flag     
 #define ADDRES_FLAG 250                     // Adress flag of mode  
 bool sendFlag = false;                       // send SMS flag
+int movePin = 0;                            // Move pin
 
 String smsText = "ALARM!!! ALARM!!! ALARM!!!";  // Sms text when Alarm 
 bool hasmsg = false;
@@ -214,14 +215,19 @@ void checkDTMF() {
 
     if (symbol=="1") {      //***Alarm ON
       if (alarmFlag == false) {
-        sendATCommand("AT+VTS=1", false);
-        alarmFlag = true;
-        delay(200);
-        Serial.println("Alarm ON1!");
-        delay(1000);
+        sendATCommand("AT+VTS=1", false);        
+         delay(1000);
         sendATCommand("ATH", false);
         delay(200);
         symbol = "";
+
+        while (movePin) {
+          movePin = digitalRead(MOV_PIR);
+        }
+        delay(200);
+        Serial.println("Alarm ON!");
+
+        alarmFlag = true;
         EEPROM.update(ADDRES_FLAG, 1);
       }
     }
@@ -229,13 +235,14 @@ void checkDTMF() {
     if (symbol=="0") {      //***Alarm OFF
       if (alarmFlag == true) {
         sendATCommand("AT+VTS=0", false);
-        alarmFlag = false;
         delay(200);
         Serial.println("Alarm OFF!");
         delay(1000);
         sendATCommand("ATH", false);
         delay(200);
         symbol = "";
+        alarmFlag = false;
+        digitalWrite(ALARM, HIGH);
         EEPROM.update(ADDRES_FLAG, 0);
       }
     }   
@@ -258,9 +265,9 @@ void setup()
  // pinMode(MOV_PIR, INPUT);
 
   pinMode(ALARM, OUTPUT);
-  digitalWrite(ALARM, LOW);
+  digitalWrite(ALARM, HIGH);
   pinMode(CHECK_ALARM, OUTPUT);
-  // digitalWrite(CHECK_ALARM, HIGH);
+  digitalWrite(CHECK_ALARM, HIGH);
 
   Serial.begin(9600);
   SIM800.begin(9600);
@@ -330,7 +337,7 @@ void loop() {
 .##.....##.########.##.....##.##.....##.##.....##
 */
 
-  int movePin = digitalRead(MOV_PIR);
+  movePin = digitalRead(MOV_PIR);
   if (movePin) {
 
     digitalWrite(CHECK_ALARM, HIGH);
